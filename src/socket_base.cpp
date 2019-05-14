@@ -1911,6 +1911,15 @@ void zmq::socket_base_t::stop_monitor (bool send_monitor_stopped_event_)
             monitor_event (ZMQ_EVENT_MONITOR_STOPPED, values, 1,
                            endpoint_uri_pair_t ());
         }
+        // Unbind the endpoint to free it up for subsequent reuse.
+        char endpoint[255];
+        size_t size = 255;
+        int rc =
+          zmq_getsockopt (_monitor_socket, ZMQ_LAST_ENDPOINT, endpoint, &size);
+        if (rc == 0 && endpoint) {
+            zmq_unbind (_monitor_socket, endpoint);
+        }
+
         zmq_close (_monitor_socket);
         _monitor_socket = NULL;
         _monitor_events = 0;
