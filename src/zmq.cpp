@@ -284,11 +284,7 @@ int zmq_socket_monitor (void *s_, const char *addr_, int events_)
 }
 
 int zmq_socket_monitor_versioned_typed (
-        void *s_,
-        const char *addr_,
-        uint64_t events_,
-        int event_version_,
-        int type_)
+  void *s_, const char *addr_, uint64_t events_, int event_version_, int type_)
 {
     zmq::socket_base_t *s = as_socket_base_t (s_);
     if (!s)
@@ -716,7 +712,7 @@ const char *zmq_msg_gets (const zmq_msg_t *msg_, const char *property_)
     return NULL;
 }
 
-    // Polling.
+// Polling.
 
 #if defined ZMQ_HAVE_POLLER
 inline int zmq_poller_poll (zmq_pollitem_t *items_, int nitems_, long timeout_)
