@@ -353,9 +353,9 @@ int zmq::socket_base_t::check_protocol (const std::string &protocol_) const
         return -1;
     }
 
-        //  Check whether socket type and transport protocol match.
-        //  Specifically, multicast protocols can't be combined with
-        //  bi-directional messaging patterns (socket types).
+    //  Check whether socket type and transport protocol match.
+    //  Specifically, multicast protocols can't be combined with
+    //  bi-directional messaging patterns (socket types).
 #if defined ZMQ_HAVE_OPENPGM || defined ZMQ_HAVE_NORM
     if ((protocol_ == "pgm" || protocol_ == "epgm" || protocol_ == "norm")
         && options.type != ZMQ_PUB && options.type != ZMQ_SUB
@@ -896,7 +896,7 @@ int zmq::socket_base_t::connect (const char *endpoint_uri_)
         }
     }
 
-        // TBD - Should we check address for ZMQ_HAVE_NORM???
+    // TBD - Should we check address for ZMQ_HAVE_NORM???
 
 #ifdef ZMQ_HAVE_OPENPGM
     if (protocol == "pgm" || protocol == "epgm") {
@@ -1639,7 +1639,8 @@ void zmq::socket_base_t::extract_flags (msg_t *msg_)
 
 int zmq::socket_base_t::monitor (const char *endpoint_,
                                  uint64_t events_,
-                                 int event_version_)
+                                 int event_version_,
+                                 int type_)
 {
     scoped_lock_t lock (_monitor_sync);
 
@@ -1670,14 +1671,31 @@ int zmq::socket_base_t::monitor (const char *endpoint_,
         errno = EPROTONOSUPPORT;
         return -1;
     }
+
     // already monitoring. Stop previous monitor before starting new one.
     if (_monitor_socket != NULL) {
         stop_monitor (true);
     }
+
+    // Check if the specified socket type is supported. It must be a
+    // one-way socket types that support the SNDMORE flag.
+    switch (type_) {
+        case ZMQ_PAIR:
+            break;
+        case ZMQ_PUB:
+            break;
+        case ZMQ_PUSH:
+            break;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+
     //  Register events to monitor
     _monitor_events = events_;
     options.monitor_event_version = event_version_;
-    _monitor_socket = zmq_socket (get_ctx (), ZMQ_PAIR);
+    //  Create a monitor socket of the specified type.
+    _monitor_socket = zmq_socket (get_ctx (), type_);
     if (_monitor_socket == NULL)
         return -1;
 
