@@ -1916,7 +1916,7 @@ void zmq::socket_base_t::stop_monitor (bool send_monitor_stopped_event_)
         size_t size = 255;
         int rc =
           zmq_getsockopt (_monitor_socket, ZMQ_LAST_ENDPOINT, endpoint, &size);
-        if (rc == 0 && endpoint) {
+        if (rc == 0 && endpoint[0] != '\0') {
             zmq_unbind (_monitor_socket, endpoint);
         }
 

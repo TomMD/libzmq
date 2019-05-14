@@ -55,11 +55,25 @@ void test_last_endpoint ()
     test_context_socket_close (sb);
 }
 
+void test_missing_endpoint ()
+{
+    void *sb = test_context_socket (ZMQ_ROUTER);
+
+    char reported[255];
+    size_t size = 255;
+    TEST_ASSERT_SUCCESS_ERRNO (
+      zmq_getsockopt (sb, ZMQ_LAST_ENDPOINT, reported, &size));
+    TEST_ASSERT_EQUAL_STRING (reported, "");
+
+    test_context_socket_close (sb);
+}
+
 int main (void)
 {
     setup_test_environment ();
 
     UNITY_BEGIN ();
     RUN_TEST (test_last_endpoint);
+    RUN_TEST (test_missing_endpoint);
     return UNITY_END ();
 }
