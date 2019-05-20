@@ -46,11 +46,6 @@
 #include "../src/curve_client_tools.hpp"
 #include "../src/random.hpp"
 
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#define snprintf(buffer_, count_, format_, ...) \
-    _snprintf_s (buffer_, count_, _TRUNCATE, format_, __VA_ARGS__)
-#endif
-
 char error_message_buffer[256];
 
 void *handler;

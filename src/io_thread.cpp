@@ -36,11 +36,6 @@
 #include "err.hpp"
 #include "ctx.hpp"
 
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#define snprintf(buffer_, count_, format_, ...) \
-    _snprintf_s (buffer_, count_, _TRUNCATE, format_, __VA_ARGS__)
-#endif
-
 zmq::io_thread_t::io_thread_t (ctx_t *ctx_, uint32_t tid_) :
     object_t (ctx_, tid_),
     _mailbox_handle (static_cast<poller_t::handle_t> (NULL))
@@ -61,7 +56,7 @@ zmq::io_thread_t::~io_thread_t ()
 
 void zmq::io_thread_t::start ()
 {
-    char name[16];
+    char name[16] = "";
     snprintf (name, sizeof (name), "IO/%u",
               get_tid () - zmq::ctx_t::reaper_tid - 1);
     //  Start the underlying I/O thread.
