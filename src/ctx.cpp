@@ -425,11 +425,7 @@ void zmq::thread_ctx_t::start_thread (thread_t &thread_,
     thread_.setSchedulingParameters (_thread_priority, _thread_sched_policy,
                                      _thread_affinity_cpus);
 
-#ifdef ZMQ_HAVE_WINDOWS
-    char namebuf[32] = "";
-#else
     char namebuf[16] = "";
-#endif
     snprintf (namebuf, sizeof (namebuf), "%s%sZMQbg%s%s",
               _thread_name_prefix.empty () ? "" : _thread_name_prefix.c_str (),
               _thread_name_prefix.empty () ? "" : "/", name_ ? "/" : "",
