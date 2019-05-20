@@ -47,7 +47,8 @@ static unsigned int __stdcall thread_routine (void *arg_)
 #endif
 {
     zmq::thread_t *self = (zmq::thread_t *) arg_;
-    self->setThreadName (self->_name.c_str ());
+    if (!self->_name.empty ())
+        self->setThreadName (self->_name.c_str ());
     self->_tfn (self->_arg);
     return 0;
 }
@@ -57,7 +58,8 @@ void zmq::thread_t::start (thread_fn *tfn_, void *arg_, const char *name_)
 {
     _tfn = tfn_;
     _arg = arg_;
-    _name = name_;
+    if (name_)
+        _name = name_;
 #if defined _WIN32_WCE
     _descriptor =
       (HANDLE) CreateThread (NULL, 0, &::thread_routine, this, 0, NULL);
@@ -213,7 +215,8 @@ static void *thread_routine (void *arg_)
 #endif
     zmq::thread_t *self = (zmq::thread_t *) arg_;
     self->applySchedulingParameters ();
-    self->setThreadName (self->_name.c_str ());
+    if (!self->_name.empty ())
+        self->setThreadName (self->_name.c_str ());
     self->_tfn (self->_arg);
     return NULL;
 }
@@ -223,7 +226,8 @@ void zmq::thread_t::start (thread_fn *tfn_, void *arg_, const char *name_)
 {
     _tfn = tfn_;
     _arg = arg_;
-    _name = name_;
+    if (name_)
+        _name = name_;
     int rc = pthread_create (&_descriptor, NULL, thread_routine, this);
     posix_assert (rc);
     _started = true;
