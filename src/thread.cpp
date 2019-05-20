@@ -93,14 +93,16 @@ void zmq::thread_t::setSchedulingParameters (
     LIBZMQ_UNUSED (affinity_cpus_);
 }
 
-namespace {
+namespace
+{
 #pragma pack(push, 8)
-    struct thread_info_t {
-        DWORD _type;
-        LPCSTR _name;
-        DWORD _thread_id;
-        DWORD _flags;
-    };
+struct thread_info_t
+{
+    DWORD _type;
+    LPCSTR _name;
+    DWORD _thread_id;
+    DWORD _flags;
+};
 #pragma pack(pop)
 }
 
