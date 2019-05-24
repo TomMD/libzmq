@@ -47,6 +47,8 @@ static unsigned int __stdcall thread_routine (void *arg_)
 #endif
 {
     zmq::thread_t *self = (zmq::thread_t *) arg_;
+    if (!self->_name.empty ())
+        self->setThreadName (self->_name.c_str ());
     self->_tfn (self->_arg);
     return 0;
 }
@@ -54,9 +56,10 @@ static unsigned int __stdcall thread_routine (void *arg_)
 
 void zmq::thread_t::start (thread_fn *tfn_, void *arg_, const char *name_)
 {
-    LIBZMQ_UNUSED (name_);
     _tfn = tfn_;
     _arg = arg_;
+    if (name_)
+        _name = name_;
 #if defined _WIN32_WCE
     _descriptor =
       (HANDLE) CreateThread (NULL, 0, &::thread_routine, this, 0, NULL);
@@ -92,10 +95,41 @@ void zmq::thread_t::setSchedulingParameters (
     LIBZMQ_UNUSED (affinity_cpus_);
 }
 
+namespace
+{
+#pragma pack(push, 8)
+struct thread_info_t
+{
+    DWORD _type;
+    LPCSTR _name;
+    DWORD _thread_id;
+    DWORD _flags;
+};
+#pragma pack(pop)
+}
+
 void zmq::thread_t::setThreadName (const char *name_)
 {
-    // not implemented
-    LIBZMQ_UNUSED (name_);
+    if (!name_)
+        return;
+
+    thread_info_t thread_info;
+    thread_info._type = 0x1000;
+    thread_info._name = name_;
+    thread_info._thread_id = -1;
+    thread_info._flags = 0;
+
+#pragma warning(push)
+#pragma warning(disable : 6320 6322)
+    __try {
+        DWORD MS_VC_EXCEPTION = 0x406D1388;
+        RaiseException (MS_VC_EXCEPTION, 0,
+                        sizeof (thread_info) / sizeof (ULONG_PTR),
+                        (ULONG_PTR *) &thread_info);
+    }
+    __except (EXCEPTION_CONTINUE_EXECUTION) {
+    }
+#pragma warning(pop)
 }
 
 #elif defined ZMQ_HAVE_VXWORKS
@@ -181,7 +215,8 @@ static void *thread_routine (void *arg_)
 #endif
     zmq::thread_t *self = (zmq::thread_t *) arg_;
     self->applySchedulingParameters ();
-    self->setThreadName (self->_name.c_str ());
+    if (!self->_name.empty ())
+        self->setThreadName (self->_name.c_str ());
     self->_tfn (self->_arg);
     return NULL;
 }
@@ -191,7 +226,8 @@ void zmq::thread_t::start (thread_fn *tfn_, void *arg_, const char *name_)
 {
     _tfn = tfn_;
     _arg = arg_;
-    _name = name_;
+    if (name_)
+        _name = name_;
     int rc = pthread_create (&_descriptor, NULL, thread_routine, this);
     posix_assert (rc);
     _started = true;
