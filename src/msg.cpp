@@ -39,6 +39,7 @@
 #include "likely.hpp"
 #include "metadata.hpp"
 #include "err.hpp"
+#include "allocator.hpp"
 
 //  Check whether the sizes of public representation of the message (zmq_msg_t)
 //  and private representation of the message (zmq::msg_t) match.
@@ -46,6 +47,7 @@
 typedef char
   zmq_msg_size_check[2 * ((sizeof (zmq::msg_t) == sizeof (zmq_msg_t)) != 0)
                      - 1];
+
 
 bool zmq::msg_t::check () const
 {
@@ -97,6 +99,7 @@ int zmq::msg_t::init_size (size_t size_)
         _u.lmsg.metadata = NULL;
         _u.lmsg.type = type_lmsg;
         _u.lmsg.flags = 0;
+        _u.lmsg.allocator_was_used = 0;
         _u.lmsg.group[0] = '\0';
         _u.lmsg.routing_id = 0;
         _u.lmsg.content = NULL;
@@ -164,6 +167,7 @@ int zmq::msg_t::init_data (void *data_,
         _u.lmsg.metadata = NULL;
         _u.lmsg.type = type_lmsg;
         _u.lmsg.flags = 0;
+        _u.lmsg.allocator_was_used = 0;
         _u.lmsg.group[0] = '\0';
         _u.lmsg.routing_id = 0;
         _u.lmsg.content =
@@ -179,6 +183,33 @@ int zmq::msg_t::init_data (void *data_,
         _u.lmsg.content->hint = hint_;
         new (&_u.lmsg.content->refcnt) zmq::atomic_counter_t ();
     }
+    return 0;
+}
+
+int zmq::msg_t::init_from_allocator (size_t size_, zmq::allocator_t *alloc_)
+{
+    zmq_assert (alloc_ != NULL && size_ != 0);
+
+    _u.lmsg.metadata = NULL;
+    _u.lmsg.type = type_lmsg;
+    _u.lmsg.flags = 0;
+    _u.lmsg.allocator_was_used = 1;
+    _u.lmsg.group[0] = '\0';
+    _u.lmsg.routing_id = 0;
+    _u.lmsg.content = reinterpret_cast<content_t *> (
+      alloc_->allocate (size_ + sizeof (content_t)));
+
+    if (!_u.lmsg.content) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    _u.lmsg.content->data = _u.lmsg.content + 1;
+    _u.lmsg.content->size = size_;
+    _u.lmsg.content->ffn = (zmq_free_fn *) alloc_->deallocate_msg;
+    _u.lmsg.content->hint = alloc_;
+    new (&_u.lmsg.content->refcnt) zmq::atomic_counter_t ();
+
     return 0;
 }
 
@@ -229,10 +260,24 @@ int zmq::msg_t::close ()
             //  counter so we call the destructor explicitly now.
             _u.lmsg.content->refcnt.~atomic_counter_t ();
 
-            if (_u.lmsg.content->ffn)
-                _u.lmsg.content->ffn (_u.lmsg.content->data,
-                                      _u.lmsg.content->hint);
-            free (_u.lmsg.content);
+            if (_u.lmsg.allocator_was_used) {
+                // take a local copy since we are going to remove (through the user-provided deallocator)
+                // the whole malloc'ed buffer, including the content_t block itself!
+                // NOTE: this copy should not be strictly needed but it's here just to help debugging:
+                content_t content;
+                content.data = _u.lmsg.content->data;
+                content.size = _u.lmsg.content->size;
+                content.ffn = _u.lmsg.content->ffn;
+                content.hint = _u.lmsg.content->hint;
+                if (content.ffn)
+                    /* return to the allocator the memory starting from the content_t struct */
+                    content.ffn (_u.lmsg.content, content.hint);
+            } else {
+                if (_u.lmsg.content->ffn)
+                    _u.lmsg.content->ffn (_u.lmsg.content->data,
+                                          _u.lmsg.content->hint);
+                free (_u.lmsg.content);
+            }
         }
     }
 
