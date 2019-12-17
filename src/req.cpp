@@ -95,8 +95,10 @@ int zmq::req_t::xsend (msg_t *msg_)
             id.set_flags (msg_t::more);
 
             rc = dealer_t::sendpipe (&id, &_reply_pipe);
-            if (rc != 0)
+            if (rc != 0) {
+                free(request_id_copy);
                 return -1;
+            }
         }
 
         msg_t bottom;
