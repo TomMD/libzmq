@@ -30,15 +30,10 @@
 #include "testutil.hpp"
 #include "testutil_unity.hpp"
 
-void setUp ()
-{
-    setup_test_context ();
-}
+#include <stdlib.h>
+#include <string.h>
 
-void tearDown ()
-{
-    teardown_test_context ();
-}
+SETUP_TEARDOWN_TESTCONTEXT
 
 //  Read one event off the monitor socket; return value and address
 //  by reference, if not null, and event number by value. Returns -1
@@ -53,10 +48,10 @@ static int get_monitor_event (void *monitor_, int *value_, char **address_)
         return -1; //  Interruped, presumably
     TEST_ASSERT_TRUE (zmq_msg_more (&msg));
 
-    uint8_t *data = (uint8_t *) zmq_msg_data (&msg);
-    uint16_t event = *(uint16_t *) (data);
+    uint8_t *data = static_cast<uint8_t *> (zmq_msg_data (&msg));
+    uint16_t event = *reinterpret_cast<uint16_t *> (data);
     if (value_)
-        *value_ = *(uint32_t *) (data + 2);
+        *value_ = *reinterpret_cast<uint32_t *> (data + 2);
 
     //  Second frame in message contains event address
     zmq_msg_init (&msg);
@@ -65,9 +60,9 @@ static int get_monitor_event (void *monitor_, int *value_, char **address_)
     TEST_ASSERT_TRUE (!zmq_msg_more (&msg));
 
     if (address_) {
-        uint8_t *data = (uint8_t *) zmq_msg_data (&msg);
+        uint8_t *data = static_cast<uint8_t *> (zmq_msg_data (&msg));
         size_t size = zmq_msg_size (&msg);
-        *address_ = (char *) malloc (size + 1);
+        *address_ = static_cast<char *> (malloc (size + 1));
         memcpy (*address_, data, size);
         *address_[size] = 0;
     }

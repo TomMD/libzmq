@@ -35,11 +35,11 @@
 
 #if defined ZMQ_FORCE_MUTEXES
 #define ZMQ_ATOMIC_COUNTER_MUTEX
-#elif defined ZMQ_HAVE_ATOMIC_INTRINSICS
-#define ZMQ_ATOMIC_COUNTER_INTRINSIC
 #elif (defined __cplusplus && __cplusplus >= 201103L)                          \
   || (defined _MSC_VER && _MSC_VER >= 1900)
 #define ZMQ_ATOMIC_COUNTER_CXX11
+#elif defined ZMQ_HAVE_ATOMIC_INTRINSICS
+#define ZMQ_ATOMIC_COUNTER_INTRINSIC
 #elif (defined __i386__ || defined __x86_64__) && defined __GNUC__
 #define ZMQ_ATOMIC_COUNTER_X86
 #elif defined __ARM_ARCH_7A__ && defined __GNUC__
@@ -156,7 +156,7 @@ class atomic_counter_t
           __atomic_sub_fetch (&_value, decrement_, __ATOMIC_ACQ_REL);
         return nv != 0;
 #elif defined ZMQ_ATOMIC_COUNTER_CXX11
-        integer_t old =
+        const integer_t old =
           _value.fetch_sub (decrement_, std::memory_order_acq_rel);
         return old - decrement_ != 0;
 #elif defined ZMQ_ATOMIC_COUNTER_ATOMIC_H
@@ -214,8 +214,7 @@ class atomic_counter_t
 #endif
 
 #if !defined ZMQ_ATOMIC_COUNTER_CXX11
-    atomic_counter_t (const atomic_counter_t &);
-    const atomic_counter_t &operator= (const atomic_counter_t &);
+    ZMQ_NON_COPYABLE_NOR_MOVABLE (atomic_counter_t)
 #endif
 #if defined(__GNUC__) || defined(__INTEL_COMPILER)                             \
   || (defined(__SUNPRO_C) && __SUNPRO_C >= 0x590)                              \

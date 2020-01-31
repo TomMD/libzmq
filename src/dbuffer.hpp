@@ -78,12 +78,12 @@ template <> class dbuffer_t<msg_t>
         msg_t &xvalue = const_cast<msg_t &> (value_);
 
         zmq_assert (xvalue.check ());
-        _back->move (xvalue); // cannot just overwrite, might leak
+        *_back = value_;
 
         zmq_assert (_back->check ());
 
         if (_sync.try_lock ()) {
-            std::swap (_back, _front);
+            _front->move (*_back);
             _has_msg = true;
 
             _sync.unlock ();
@@ -132,9 +132,7 @@ template <> class dbuffer_t<msg_t>
     mutex_t _sync;
     bool _has_msg;
 
-    //  Disable copying of dbuffer.
-    dbuffer_t (const dbuffer_t &);
-    const dbuffer_t &operator= (const dbuffer_t &);
+    ZMQ_NON_COPYABLE_NOR_MOVABLE (dbuffer_t)
 };
 }
 

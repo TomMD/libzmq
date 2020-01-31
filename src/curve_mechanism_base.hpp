@@ -48,6 +48,8 @@
 #include "mechanism_base.hpp"
 #include "options.hpp"
 
+#include <memory>
+
 namespace zmq
 {
 class curve_mechanism_base_t : public virtual mechanism_base_t
@@ -59,8 +61,8 @@ class curve_mechanism_base_t : public virtual mechanism_base_t
                             const char *decode_nonce_prefix_);
 
     // mechanism implementation
-    virtual int encode (msg_t *msg_);
-    virtual int decode (msg_t *msg_);
+    int encode (msg_t *msg_) ZMQ_OVERRIDE;
+    int decode (msg_t *msg_) ZMQ_OVERRIDE;
 
   protected:
     const char *encode_nonce_prefix;

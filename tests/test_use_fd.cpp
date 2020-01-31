@@ -30,23 +30,17 @@
 #include "testutil.hpp"
 #include "testutil_unity.hpp"
 
-#include <unity.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-void setUp ()
-{
-    setup_test_context ();
-}
-
-void tearDown ()
-{
-    teardown_test_context ();
-}
-
+SETUP_TEARDOWN_TESTCONTEXT
 
 #if !defined(ZMQ_HAVE_WINDOWS)
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netdb.h>
+#include <unistd.h>
 
 int setup_socket_and_set_fd (void *zmq_socket_,
                              int af_,
@@ -125,7 +119,7 @@ void test_client_server (pre_allocate_sock_fun_t pre_allocate_sock_fun_)
     zmq_msg_t msg;
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_init_size (&msg, 1));
 
-    char *data = (char *) zmq_msg_data (&msg);
+    char *data = static_cast<char *> (zmq_msg_data (&msg));
     data[0] = 1;
 
     int rc = zmq_msg_send (&msg, sc, ZMQ_SNDMORE);
@@ -147,7 +141,7 @@ void test_client_server (pre_allocate_sock_fun_t pre_allocate_sock_fun_)
 
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_init_size (&msg, 1));
 
-    data = (char *) zmq_msg_data (&msg);
+    data = static_cast<char *> (zmq_msg_data (&msg));
     data[0] = 2;
 
     TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_set_routing_id (&msg, routing_id));
@@ -233,28 +227,43 @@ void pre_allocate_sock_ipc_int (void *zmq_socket_, const char *path_)
     // TODO check return value of unlink
     unlink (path_);
 
-    setup_socket_and_set_fd (zmq_socket_, AF_UNIX, 0, (struct sockaddr *) &addr,
+    setup_socket_and_set_fd (zmq_socket_, AF_UNIX, 0,
+                             reinterpret_cast<struct sockaddr *> (&addr),
                              sizeof (struct sockaddr_un));
 }
 
+char ipc_endpoint[16];
+
 void pre_allocate_sock_ipc (void *sb_, char *my_endpoint_)
 {
-    pre_allocate_sock_ipc_int (sb_, "/tmp/test_use_fd_ipc");
-    strcpy (my_endpoint_, "ipc:///tmp/test_use_fd_ipc");
+    strcpy (ipc_endpoint, "tmpXXXXXX");
+
+#ifdef HAVE_MKDTEMP
+    TEST_ASSERT_TRUE (mkdtemp (ipc_endpoint));
+    strcat (ipc_endpoint, "/ipc");
+#else
+    int fd = mkstemp (ipc_endpoint);
+    TEST_ASSERT_TRUE (fd != -1);
+    close (fd);
+#endif
+
+    pre_allocate_sock_ipc_int (sb_, ipc_endpoint);
+    strcpy (my_endpoint_, "ipc://");
+    strcat (my_endpoint_, ipc_endpoint);
 }
 
 void test_req_rep_ipc ()
 {
     test_req_rep (pre_allocate_sock_ipc);
 
-    TEST_ASSERT_SUCCESS_ERRNO (unlink ("/tmp/test_use_fd_ipc"));
+    TEST_ASSERT_SUCCESS_ERRNO (unlink (ipc_endpoint));
 }
 
 void test_pair_ipc ()
 {
     test_pair (pre_allocate_sock_ipc);
 
-    TEST_ASSERT_SUCCESS_ERRNO (unlink ("/tmp/test_use_fd_ipc"));
+    TEST_ASSERT_SUCCESS_ERRNO (unlink (ipc_endpoint));
 }
 
 void test_client_server_ipc ()
@@ -262,7 +271,7 @@ void test_client_server_ipc ()
 #if defined(ZMQ_SERVER) && defined(ZMQ_CLIENT)
     test_client_server (pre_allocate_sock_ipc);
 
-    TEST_ASSERT_SUCCESS_ERRNO (unlink ("/tmp/test_use_fd_ipc"));
+    TEST_ASSERT_SUCCESS_ERRNO (unlink (ipc_endpoint));
 #endif
 }
 

@@ -84,6 +84,7 @@ class msg_t
         pong = 8,
         subscribe = 12,
         cancel = 16,
+        close_cmd = 20,
         credential = 32,
         routing_id = 64,
         shared = 128
@@ -126,6 +127,7 @@ class msg_t
     bool is_leave () const;
     bool is_ping () const;
     bool is_pong () const;
+    bool is_close_cmd () const;
 
     //  These are called on each message received by the session_base class,
     //  so get them inlined to avoid the overhead of 2 function calls per msg
@@ -144,10 +146,10 @@ class msg_t
     bool is_cmsg () const;
     bool is_lmsg () const;
     bool is_zcmsg () const;
-    uint32_t get_routing_id ();
+    uint32_t get_routing_id () const;
     int set_routing_id (uint32_t routing_id_);
     int reset_routing_id ();
-    const char *group ();
+    const char *group () const;
     int set_group (const char *group_);
     int set_group (const char *, size_t length_);
 
@@ -287,7 +289,7 @@ class msg_t
 inline int close_and_return (zmq::msg_t *msg_, int echo_)
 {
     // Since we abort on close failure we preserve errno for success case.
-    int err = errno;
+    const int err = errno;
     const int rc = msg_->close ();
     errno_assert (rc == 0);
     errno = err;

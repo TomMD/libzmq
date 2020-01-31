@@ -7,6 +7,7 @@ doc/Makefile
 Makefile.in
 configure
 libtool
+libtestutil.a
 libunity.a
 config
 config.status
@@ -74,6 +75,7 @@ test_ctx_options
 test_iov
 test_security
 test_security_curve
+test_security_no_zap_handler
 test_probe_router
 test_stream
 test_spec_dealer
@@ -100,6 +102,7 @@ test_reqrep_device_tipc
 test_reqrep_tipc
 test_router_handover
 test_router_mandatory_tipc
+test_router_notify
 test_shutdown_stress_tipc
 test_sub_forward_tipc
 test_term_endpoint_tipc
@@ -133,8 +136,7 @@ test_radio_dish
 test_udp
 test_scatter_gather
 test_socketopt_hwm
-test_use_fd_ipc
-test_use_fd_tcp
+test_use_fd
 test_pub_invert_matching
 test_dgram
 test_base85
@@ -144,14 +146,20 @@ test_zmq_poll_fd
 test_reconnect_ivl
 test_address_tipc
 test_app_meta
+test_security_gssapi
 test_security_zap
 test_socket_null
 test_xpub_verbose
 test_mock_pub_sub
 test_proxy_hwm
+test_ws_transport
+test_wss_transport
+test_socks
+test_xpub_manual_last_value
 unittest_ip_resolver
 unittest_mtrie
 unittest_poller
+unittest_radix_tree
 unittest_udp_address
 unittest_ypipe
 tests/test*.log
@@ -166,12 +174,15 @@ remote_lat
 remote_thr
 inproc_lat
 inproc_thr
+proxy_thr
+benchmark_radix_tree
 !local_lat/
 !local_thr/
 !remote_lat/
 !remote_thr/
 !inproc_lat/
 !inproc_thr/
+!benchmark_radix_tree/
 doc/*.1
 doc/*.3
 doc/*.7
@@ -193,3 +204,5 @@ zeromq-*.zip
 core
 build
 test-suite.log
+.idea/
+cmake-build-debug/

@@ -30,7 +30,14 @@
 #include "testutil.hpp"
 #include "testutil_unity.hpp"
 
-#include <unity.h>
+#include <string.h>
+
+#ifndef _WIN32
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
 
 // Helper macro to define the v4/v6 function pairs
 #define MAKE_TEST_V4V6(_test)                                                  \
@@ -44,15 +51,7 @@
         _test (true);                                                          \
     }
 
-void setUp ()
-{
-    setup_test_context ();
-}
-
-void tearDown ()
-{
-    teardown_test_context ();
-}
+SETUP_TEARDOWN_TESTCONTEXT
 
 void msg_send_expect_success (void *s_, const char *group_, const char *body_)
 {
@@ -258,9 +257,8 @@ static const char *mcast_url (int ipv6_)
 {
     if (ipv6_) {
         return "udp://[" MCAST_IPV6 "]:5555";
-    } else {
-        return "udp://" MCAST_IPV4 ":5555";
     }
+    return "udp://" MCAST_IPV4 ":5555";
 }
 
 //  OSX uses a different name for this socket option
@@ -300,14 +298,14 @@ static bool is_multicast_available (int ipv6_)
         any_ipv6->sin6_flowinfo = 0;
         any_ipv6->sin6_scope_id = 0;
 
-        rc = inet_pton (AF_INET6, "::", &any_ipv6->sin6_addr);
+        rc = test_inet_pton (AF_INET6, "::", &any_ipv6->sin6_addr);
         if (rc == 0) {
             goto out;
         }
 
         *mcast_ipv6 = *any_ipv6;
 
-        rc = inet_pton (AF_INET6, MCAST_IPV6, &mcast_ipv6->sin6_addr);
+        rc = test_inet_pton (AF_INET6, MCAST_IPV6, &mcast_ipv6->sin6_addr);
         if (rc == 0) {
             goto out;
         }
@@ -320,14 +318,14 @@ static bool is_multicast_available (int ipv6_)
         any_ipv4->sin_family = AF_INET;
         any_ipv4->sin_port = htons (5555);
 
-        rc = inet_pton (AF_INET, "0.0.0.0", &any_ipv4->sin_addr);
+        rc = test_inet_pton (AF_INET, "0.0.0.0", &any_ipv4->sin_addr);
         if (rc == 0) {
             goto out;
         }
 
         *mcast_ipv4 = *any_ipv4;
 
-        rc = inet_pton (AF_INET, MCAST_IPV4, &mcast_ipv4->sin_addr);
+        rc = test_inet_pton (AF_INET, MCAST_IPV4, &mcast_ipv4->sin_addr);
         if (rc == 0) {
             goto out;
         }

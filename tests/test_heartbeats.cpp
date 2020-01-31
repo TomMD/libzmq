@@ -26,10 +26,13 @@
 typedef SOCKET raw_socket;
 #else
 #include <arpa/inet.h>
+#include <unistd.h>
 typedef int raw_socket;
 #endif
 
 #include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 
 // TODO remove this here, either ensure that UINT16_MAX is always properly
 // defined or handle this at a more central location
@@ -39,16 +42,7 @@ typedef int raw_socket;
 
 #include "testutil_unity.hpp"
 
-void setUp ()
-{
-    setup_test_context ();
-}
-
-void tearDown ()
-{
-    teardown_test_context ();
-}
-
+SETUP_TEARDOWN_TESTCONTEXT
 
 //  Read one event off the monitor socket; return value and address
 //  by reference, if not null, and event number by value. Returns -1
@@ -66,8 +60,8 @@ static int get_monitor_event (void *monitor_)
         }
         TEST_ASSERT_TRUE (zmq_msg_more (&msg));
 
-        uint8_t *data = (uint8_t *) zmq_msg_data (&msg);
-        uint16_t event = *(uint16_t *) (data);
+        uint8_t *data = static_cast<uint8_t *> (zmq_msg_data (&msg));
+        uint16_t event = *reinterpret_cast<uint16_t *> (data);
 
         //  Second frame in message contains event address
         TEST_ASSERT_SUCCESS_ERRNO (zmq_msg_init (&msg));
@@ -374,6 +368,11 @@ DEFINE_TESTS (pull, push, ZMQ_PULL, ZMQ_PUSH)
 DEFINE_TESTS (sub, pub, ZMQ_SUB, ZMQ_PUB)
 DEFINE_TESTS (pair, pair, ZMQ_PAIR, ZMQ_PAIR)
 
+#ifdef ZMQ_BUILD_DRAFT_API
+DEFINE_TESTS (gather, scatter, ZMQ_GATHER, ZMQ_SCATTER)
+DEFINE_TESTS (client, server, ZMQ_CLIENT, ZMQ_SERVER)
+#endif
+
 const int deciseconds_per_millisecond = 100;
 const int heartbeat_ttl_max =
   (UINT16_MAX + 1) * deciseconds_per_millisecond - 1;
@@ -446,6 +445,17 @@ int main (void)
     RUN_TEST (test_heartbeat_notimeout_pull_push_with_curve);
     RUN_TEST (test_heartbeat_notimeout_sub_pub_with_curve);
     RUN_TEST (test_heartbeat_notimeout_pair_pair_with_curve);
+
+#ifdef ZMQ_BUILD_DRAFT_API
+    RUN_TEST (test_heartbeat_ttl_client_server);
+    RUN_TEST (test_heartbeat_ttl_gather_scatter);
+
+    RUN_TEST (test_heartbeat_notimeout_client_server);
+    RUN_TEST (test_heartbeat_notimeout_gather_scatter);
+
+    RUN_TEST (test_heartbeat_notimeout_client_server_with_curve);
+    RUN_TEST (test_heartbeat_notimeout_gather_scatter_with_curve);
+#endif
 
     return UNITY_END ();
 }

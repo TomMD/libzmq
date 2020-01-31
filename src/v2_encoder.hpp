@@ -36,11 +36,11 @@ namespace zmq
 {
 //  Encoder for 0MQ framing protocol. Converts messages into data stream.
 
-class v2_encoder_t : public encoder_base_t<v2_encoder_t>
+class v2_encoder_t ZMQ_FINAL : public encoder_base_t<v2_encoder_t>
 {
   public:
     v2_encoder_t (size_t bufsize_);
-    virtual ~v2_encoder_t ();
+    ~v2_encoder_t () ZMQ_FINAL;
 
   private:
     void size_ready ();
@@ -48,8 +48,7 @@ class v2_encoder_t : public encoder_base_t<v2_encoder_t>
 
     unsigned char _tmp_buf[9];
 
-    v2_encoder_t (const v2_encoder_t &);
-    const v2_encoder_t &operator= (const v2_encoder_t &);
+    ZMQ_NON_COPYABLE_NOR_MOVABLE (v2_encoder_t)
 };
 }
 

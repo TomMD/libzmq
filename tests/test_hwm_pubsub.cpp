@@ -30,28 +30,21 @@
 #include "testutil.hpp"
 #include "testutil_unity.hpp"
 
+#include <string.h>
+
+// NOTE: on OSX the endpoint returned by ZMQ_LAST_ENDPOINT may be quite long,
+//       ensure we have extra space for that:
 #define SOCKET_STRING_LEN (MAX_SOCKET_STRING * 4)
 
-void setUp ()
-{
-    setup_test_context ();
-}
+SETUP_TEARDOWN_TESTCONTEXT
 
-void tearDown ()
+int test_defaults (int send_hwm_, int msg_cnt_, const char *endpoint_)
 {
-    teardown_test_context ();
-}
-
-int test_defaults (int send_hwm_, int msg_cnt_, const char *endpoint)
-{
-    size_t len = SOCKET_STRING_LEN;
     char pub_endpoint[SOCKET_STRING_LEN];
 
-    // Set up and bind PUB socket
-    void *pub_socket = test_context_socket (ZMQ_PUB);
-    TEST_ASSERT_SUCCESS_ERRNO (zmq_bind (pub_socket, endpoint));
-    TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_getsockopt (pub_socket, ZMQ_LAST_ENDPOINT, pub_endpoint, &len));
+    // Set up and bind XPUB socket
+    void *pub_socket = test_context_socket (ZMQ_XPUB);
+    test_bind (pub_socket, endpoint_, pub_endpoint, sizeof pub_endpoint);
 
     // Set up and connect SUB socket
     void *sub_socket = test_context_socket (ZMQ_SUB);
@@ -63,8 +56,10 @@ int test_defaults (int send_hwm_, int msg_cnt_, const char *endpoint)
     TEST_ASSERT_SUCCESS_ERRNO (
       zmq_setsockopt (sub_socket, ZMQ_SUBSCRIBE, 0, 0));
 
-    msleep (
-      SETTLE_TIME); // give some time to background threads to perform PUB-SUB connection
+    // Wait before starting TX operations till 1 subscriber has subscribed
+    // (in this test there's 1 subscriber only)
+    const char subscription_to_all_topics[] = {1, 0};
+    recv_string_expect_success (pub_socket, subscription_to_all_topics, 0);
 
     // Send until we reach "mute" state
     int send_count = 0;
@@ -91,27 +86,33 @@ int test_defaults (int send_hwm_, int msg_cnt_, const char *endpoint)
     return recv_count;
 }
 
-int receive (void *socket_)
+int receive (void *socket_, int *is_termination_)
 {
     int recv_count = 0;
+    *is_termination_ = 0;
+
     // Now receive all sent messages
-    while (0 == zmq_recv (socket_, NULL, 0, 0)) {
+    char buffer[255];
+    int len;
+    while ((len = zmq_recv (socket_, buffer, sizeof (buffer), 0)) >= 0) {
         ++recv_count;
+
+        if (len == 3 && strncmp (buffer, "end", len) == 0) {
+            *is_termination_ = 1;
+            return recv_count;
+        }
     }
 
     return recv_count;
 }
 
-int test_blocking (int send_hwm_, int msg_cnt_, const char *endpoint)
+int test_blocking (int send_hwm_, int msg_cnt_, const char *endpoint_)
 {
-    size_t len = SOCKET_STRING_LEN;
     char pub_endpoint[SOCKET_STRING_LEN];
 
     // Set up bind socket
-    void *pub_socket = test_context_socket (ZMQ_PUB);
-    TEST_ASSERT_SUCCESS_ERRNO (zmq_bind (pub_socket, endpoint));
-    TEST_ASSERT_SUCCESS_ERRNO (
-      zmq_getsockopt (pub_socket, ZMQ_LAST_ENDPOINT, pub_endpoint, &len));
+    void *pub_socket = test_context_socket (ZMQ_XPUB);
+    test_bind (pub_socket, endpoint_, pub_endpoint, sizeof pub_endpoint);
 
     // Set up connect socket
     void *sub_socket = test_context_socket (ZMQ_SUB);
@@ -129,24 +130,47 @@ int test_blocking (int send_hwm_, int msg_cnt_, const char *endpoint)
     TEST_ASSERT_SUCCESS_ERRNO (
       zmq_setsockopt (sub_socket, ZMQ_SUBSCRIBE, 0, 0));
 
-    msleep (SETTLE_TIME);
+    // Wait before starting TX operations till 1 subscriber has subscribed
+    // (in this test there's 1 subscriber only)
+    const uint8_t subscription_to_all_topics[] = {1};
+    recv_array_expect_success (pub_socket, subscription_to_all_topics, 0);
 
     // Send until we block
     int send_count = 0;
     int recv_count = 0;
+    int blocked_count = 0;
+    int is_termination = 0;
     while (send_count < msg_cnt_) {
         const int rc = zmq_send (pub_socket, NULL, 0, ZMQ_DONTWAIT);
         if (rc == 0) {
             ++send_count;
         } else if (-1 == rc) {
             // if the PUB socket blocks due to HWM, errno should be EAGAIN:
-            TEST_ASSERT_EQUAL_INT (EAGAIN, errno);
-            recv_count += receive (sub_socket);
+            blocked_count++;
+            TEST_ASSERT_FAILURE_ERRNO (EAGAIN, -1);
+            recv_count += receive (sub_socket, &is_termination);
         }
     }
 
-    msleep (2 * SETTLE_TIME); // required for TCP transport
-    recv_count += receive (sub_socket);
+    // if send_hwm_ < msg_cnt_, we should block at least once:
+    char counts_string[128];
+    snprintf (counts_string, sizeof counts_string - 1,
+              "sent = %i, received = %i", send_count, recv_count);
+    TEST_ASSERT_GREATER_THAN_INT_MESSAGE (0, blocked_count, counts_string);
+
+    // dequeue SUB socket again, to make sure XPUB has space to send the termination message
+    recv_count += receive (sub_socket, &is_termination);
+
+    // send termination message
+    send_string_expect_success (pub_socket, "end", 0);
+
+    // now block on the SUB side till we get the termination message
+    while (is_termination == 0)
+        recv_count += receive (sub_socket, &is_termination);
+
+    // remove termination message from the count:
+    recv_count--;
+
     TEST_ASSERT_EQUAL_INT (send_count, recv_count);
 
     // Clean up
@@ -220,36 +244,47 @@ void test_reset_hwm ()
     test_context_socket_close (pub_socket);
 }
 
-void test_tcp ()
+void test_defaults_large (const char *bind_endpoint_)
 {
-    // send 1000 msg on hwm 1000, receive 1000, on TCP transport
-    TEST_ASSERT_EQUAL_INT (1000,
-                           test_defaults (1000, 1000, "tcp://127.0.0.1:*"));
+    // send 1000 msg on hwm 1000, receive 1000
+    TEST_ASSERT_EQUAL_INT (1000, test_defaults (1000, 1000, bind_endpoint_));
+}
 
-    // send 100 msg on hwm 100, receive 100
-    TEST_ASSERT_EQUAL_INT (100, test_defaults (100, 100, "tcp://127.0.0.1:*"));
+void test_defaults_small (const char *bind_endpoint_)
+{
+    // send 1000 msg on hwm 100, receive 100
+    TEST_ASSERT_EQUAL_INT (100, test_defaults (100, 100, bind_endpoint_));
+}
 
+void test_blocking (const char *bind_endpoint_)
+{
     // send 6000 msg on hwm 2000, drops above hwm, only receive hwm:
-    TEST_ASSERT_EQUAL_INT (6000,
-                           test_blocking (2000, 6000, "tcp://127.0.0.1:*"));
+    TEST_ASSERT_EQUAL_INT (6000, test_blocking (2000, 6000, bind_endpoint_));
 }
 
-void test_inproc ()
-{
-    TEST_ASSERT_EQUAL_INT (1000, test_defaults (1000, 1000, "inproc://a"));
-    TEST_ASSERT_EQUAL_INT (100, test_defaults (100, 100, "inproc://b"));
-    TEST_ASSERT_EQUAL_INT (6000, test_blocking (2000, 6000, "inproc://c"));
-}
+#define DEFINE_REGULAR_TEST_CASES(name, bind_endpoint)                         \
+    void test_defaults_large_##name ()                                         \
+    {                                                                          \
+        test_defaults_large (bind_endpoint);                                   \
+    }                                                                          \
+                                                                               \
+    void test_defaults_small_##name ()                                         \
+    {                                                                          \
+        test_defaults_small (bind_endpoint);                                   \
+    }                                                                          \
+                                                                               \
+    void test_blocking_##name () { test_blocking (bind_endpoint); }
 
-#ifndef ZMQ_HAVE_WINDOWS
+#define RUN_REGULAR_TEST_CASES(name)                                           \
+    RUN_TEST (test_defaults_large_##name);                                     \
+    RUN_TEST (test_defaults_small_##name);                                     \
+    RUN_TEST (test_blocking_##name)
 
-void test_ipc ()
-{
-    TEST_ASSERT_EQUAL_INT (1000, test_defaults (1000, 1000, "ipc://*"));
-    TEST_ASSERT_EQUAL_INT (100, test_defaults (100, 100, "ipc://*"));
-    TEST_ASSERT_EQUAL_INT (6000, test_blocking (2000, 6000, "ipc://*"));
-}
+DEFINE_REGULAR_TEST_CASES (tcp, "tcp://127.0.0.1:*")
+DEFINE_REGULAR_TEST_CASES (inproc, "inproc://a")
 
+#if !defined(ZMQ_HAVE_WINDOWS) && !defined(ZMQ_HAVE_GNU)
+DEFINE_REGULAR_TEST_CASES (ipc, "ipc://*")
 #endif
 
 int main ()
@@ -258,12 +293,11 @@ int main ()
 
     UNITY_BEGIN ();
 
-    // repeat the test for both TCP, INPROC and IPC transports:
+    RUN_REGULAR_TEST_CASES (tcp);
+    RUN_REGULAR_TEST_CASES (inproc);
 
-    RUN_TEST (test_tcp);
-    RUN_TEST (test_inproc);
-#ifndef ZMQ_HAVE_WINDOWS
-    RUN_TEST (test_ipc);
+#if !defined(ZMQ_HAVE_WINDOWS) && !defined(ZMQ_HAVE_GNU)
+    RUN_REGULAR_TEST_CASES (ipc);
 #endif
     RUN_TEST (test_reset_hwm);
     return UNITY_END ();

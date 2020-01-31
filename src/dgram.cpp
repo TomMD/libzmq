@@ -94,7 +94,7 @@ int zmq::dgram_t::xsend (msg_t *msg_)
 {
     // If there's no out pipe, just drop it.
     if (!_pipe) {
-        int rc = msg_->close ();
+        const int rc = msg_->close ();
         errno_assert (rc == 0);
         return -1;
     }
@@ -106,18 +106,12 @@ int zmq::dgram_t::xsend (msg_t *msg_)
             errno = EINVAL;
             return -1;
         }
-
-        //  Expect one more message frame.
-        _more_out = true;
     } else {
         //  dgram messages are two part only, reject part if more is set
         if (msg_->flags () & msg_t::more) {
             errno = EINVAL;
             return -1;
         }
-
-        //  This is the last part of the message.
-        _more_out = false;
     }
 
     // Push the message into the pipe.
@@ -129,8 +123,11 @@ int zmq::dgram_t::xsend (msg_t *msg_)
     if (!(msg_->flags () & msg_t::more))
         _pipe->flush ();
 
+    // flip the more flag
+    _more_out = !_more_out;
+
     //  Detach the message from the data buffer.
-    int rc = msg_->init ();
+    const int rc = msg_->init ();
     errno_assert (rc == 0);
 
     return 0;
