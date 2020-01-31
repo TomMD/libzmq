@@ -428,6 +428,12 @@ int zmq::ip_resolver_t::resolve_nic_name (ip_addr_t *ip_addr_, const char *nic_)
     rc = ioctl (fd, SIOCGLIFCONF, (char *) &ifc);
     errno_assert (rc != -1);
 
+    // Validate ip input exists prior to dereference in the loop.
+    if (NULL == ip_addr_) {
+        errno = EINVAL;
+        return -1;
+    }
+
     //  Find the interface with the specified name and AF_INET family.
     bool found = false;
     lifreq *ifrp = ifc.lifc_req;
