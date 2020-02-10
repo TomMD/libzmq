@@ -246,7 +246,6 @@ int zmq::curve_client_t::process_ready (const uint8_t *msg_data_,
 
     rc = parse_metadata (ready_plaintext + crypto_box_ZEROBYTES,
                          clen - crypto_box_ZEROBYTES);
-    free (ready_plaintext);
 
     if (rc == 0)
         _state = connected;
